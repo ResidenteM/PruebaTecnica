@@ -12,5 +12,5 @@
 npm install
 4. Iniciar el servidor con:
 node server.js
-5. Abrir el navegador y acceder a la página web:
+5. Abrir el navegador y acceder a la página web (o abrir el index.html):
 http://localhost:3000
