@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Ubicaciones</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 50vh;
+            width: 100%;
+        }
+        .container {
+            padding: 20px;
+        }
+        .form input,
+        .form button {
+            margin: 5px;
+        }
+        .locations .location-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAXA9wNHZlKMvM1kVWtIytrsDvZNEkW4Sc"></script>
+</head>
+<body>
+    <!-- Mapa interactivo -->
+    <div id="map"></div>
+
+    <!-- Formulario para agregar y buscar ubicaciones -->
+    <div class="container">
+        <div class="form">
+            <input type="text" id="name" placeholder="Nombre del edificio o localización" />
+            <button onclick="addLocation()">Agregar Ubicación</button>
+        </div>
+        <div class="form">
+            <input type="text" id="search" placeholder="Buscar ubicación por nombre" />
+            <button onclick="searchLocation()">Buscar</button>
+        </div>
+
+        <!-- Lista de ubicaciones guardadas -->
+        <div class="locations" id="locations"></div>
+    </div>
+
+    <script>
+        let map; // Referencia al mapa
+        let marker; // Marcador actual en el mapa
+        let selectedLocation = {}; // Ubicación seleccionada
+
+        // Inicializa el mapa y configura los eventos
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                center: { lat: 40.7128, lng: -74.0060 }, // Coordenadas iniciales (Nueva York)
+                zoom: 12,
+            });
+
+            // Detecta clics en el mapa
+            map.addListener("click", (event) => {
+                if (marker) marker.setMap(null);
+                marker = new google.maps.Marker({
+                    position: event.latLng,
+                    map,
+                });
+                selectedLocation = {
+                    lat: event.latLng.lat(),
+                    lng: event.latLng.lng(),
+                };
+            });
+        }
+
+        // Agrega una ubicación nueva
+        async function addLocation() {
+            const name = document.getElementById("name").value;
+
+            if (!name || !selectedLocation.lat || !selectedLocation.lng) {
+                alert("Selecciona una ubicación en el mapa y completa el nombre.");
+                return;
+            }
+
+            const address = "Dirección desconocida";
+            await fetch("http://localhost:3000/locations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name,
+                    address,
+                    lat: selectedLocation.lat,
+                    lng: selectedLocation.lng,
+                }),
+            });
+
+            document.getElementById("name").value = "";
+            fetchLocations(); // Actualiza la lista de ubicaciones
+        }
+
+        // Busca una ubicación por nombre
+        async function searchLocation() {
+            const searchQuery = document.getElementById("search").value.toLowerCase();
+
+            if (!searchQuery) {
+                alert("Por favor, ingresa un nombre para buscar.");
+                return;
+            }
+
+            const response = await fetch("http://localhost:3000/locations");
+            const locations = await response.json();
+
+            const results = locations.filter((loc) =>
+                loc.name.toLowerCase().includes(searchQuery)
+            );
+
+            if (results.length === 0) {
+                alert("No se encontraron coincidencias.");
+                return;
+            }
+
+            // Muestra la primera coincidencia en el mapa
+            const firstResult = results[0];
+            map.setCenter({ lat: firstResult.lat, lng: firstResult.lng });
+            map.setZoom(14);
+
+            if (marker) marker.setMap(null);
+            marker = new google.maps.Marker({
+                position: { lat: firstResult.lat, lng: firstResult.lng },
+                map,
+            });
+
+            // Muestra los resultados en la lista
+            const locationsDiv = document.getElementById("locations");
+            locationsDiv.innerHTML = results.map((loc) => `
+                <div class="location-item">
+                    <strong>${loc.name}</strong><br>
+                    Dirección: ${loc.address}<br>
+                    Latitud: ${loc.lat}, Longitud: ${loc.lng}<br>
+                    <input type="text" placeholder="Nuevo nombre" id="update-${loc.id}" />
+                    <button onclick="updateLocation(${loc.id})">Actualizar</button>
+                </div>
+            `).join("");
+        }
+
+        // Obtiene y muestra todas las ubicaciones guardadas
+        async function fetchLocations() {
+            const response = await fetch("http://localhost:3000/locations");
+            const locations = await response.json();
+
+            const locationsDiv = document.getElementById("locations");
+            locationsDiv.innerHTML = locations.map((loc) => `
+                <div class="location-item">
+                    <strong>${loc.name}</strong><br>
+                    Dirección: ${loc.address}<br>
+                    Latitud: ${loc.lat}, Longitud: ${loc.lng}<br>
+                    <input type="text" placeholder="Nuevo nombre" id="update-${loc.id}" />
+                    <button onclick="updateLocation(${loc.id})">Actualizar</button>
+                </div>
+            `).join("");
+        }
+
+        // Actualiza el nombre de una ubicación guardada
+        async function updateLocation(id) {
+            const newName = document.getElementById(`update-${id}`).value;
+
+            if (!newName) {
+                alert("Ingresa un nuevo nombre.");
+                return;
+            }
+
+            await fetch(`http://localhost:3000/locations/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: newName }),
+            });
+
+            fetchLocations(); // Actualiza la lista de ubicaciones
+        }
+
+        // Inicializa la aplicación
+        initMap();
+        fetchLocations();
+    </script>
+</body>
+</html>
+
